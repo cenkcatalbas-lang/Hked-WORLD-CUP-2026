@@ -1,45 +1,53 @@
 import streamlit as st
-import requests
 import pandas as pd
+import requests
 
-# FIFA Dünya Kupası ID'si: 4429
-LEAGUE_ID = "4429"
+# 1. Veri Hazırlığı
+@st.cache_data(ttl=3600)
+def load_excel():
+    # Sizin Excel dosyanız (İndeks 0: Maç, 6-10: Katılımcılar)
+    return pd.read_excel("NEW HKED.xlsx", header=None)
 
 @st.cache_data(ttl=3600)
-def get_world_cup_data():
-    url = f"https://www.thesportsdb.com/api/v1/json/3/eventsnextleague.php?id={LEAGUE_ID}"
-    response = requests.get(url)
-    data = response.json()
-    
-    events = data.get('events', [])
-    if not events: return pd.DataFrame()
-    
-    rows = []
-    for e in events:
-        rows.append({
-            'Maç': f"{e['strHomeTeam']} - {e['strAwayTeam']}",
-            'Tarih': e['dateEvent'],
-            'Stadyum': e['strVenue']
-        })
-    return pd.DataFrame(rows)
+def get_api_results():
+    # TheSportsDB API'den sonuçları çek
+    url = "https://www.thesportsdb.com/api/v1/json/3/eventspastleague.php?id=4429"
+    data = requests.get(url).json()
+    results = {}
+    if 'events' in data and data['events']:
+        for e in data['events']:
+            # Maç ismini Excel'deki formatla eşleştiriyoruz (Basit bir eşleştirme)
+            key = f"{e['strHomeTeam']} - {e['strAwayTeam']}"
+            home = int(e['intHomeScore']) if e['intHomeScore'] else 0
+            away = int(e['intAwayScore']) if e['intAwayScore'] else 0
+            
+            # Sonucu 1-0-2 formatına çevir
+            if home > away: res = "1"
+            elif home < away: res = "2"
+            else: res = "0"
+            results[key] = res
+    return results
 
-st.title("🏆 FIFA Dünya Kupası 2026 Tahmin Sistemi")
+# 2. Puanlama Mantığı
+def calculate_points():
+    df = load_excel()
+    live_results = get_api_results()
+    katilimcilar = {6: 'TOLGA', 7: 'MUSTAFA', 8: 'IŞITAN', 9: 'YİĞİT', 10: 'CENK'}
+    puanlar = {isim: 0 for isim in katilimcilar.values()}
 
-df = get_world_cup_data()
+    for _, row in df.iterrows():
+        mac_adi = row[0] # Excel 1. sütun
+        if mac_adi in live_results:
+            gercek_sonuc = live_results[mac_adi]
+            for col, isim in katilimcilar.items():
+                if str(row[col]) == gercek_sonuc:
+                    puanlar[isim] += 1 # Her doğru tahmin 1 puan
+    return puanlar
 
-if not df.empty:
-    st.subheader("📅 Yaklaşan Maçlar")
-    st.table(df)
-    
-    # Kullanıcı tahmin formu
-    with st.form("tahmin_formu"):
-        secili_mac = st.selectbox("Tahmin Yapacağınız Maç:", df['Maç'].tolist())
-        tahmin = st.radio("Tahmininiz (1-0-2):", ["1", "0", "2"])
-        submit = st.form_submit_button("Tahmini Kaydet")
-        
-        if submit:
-            st.session_state[secili_mac] = tahmin
-            st.success(f"{secili_mac} için tahmininiz alındı: {tahmin}")
-else:
-    st.warning("Şu an yaklaşan maç verisi bulunamadı.")
-    
+# 3. Arayüz
+st.title("🏆 HKED 2026 Dünya Kupası Tahminleri")
+puanlar = calculate_points()
+
+st.subheader("📊 Canlı Puan Tablosu")
+puan_df = pd.DataFrame(list(puanlar.items()), columns=['İsim', 'Puan'])
+st.table(puan_df.sort_values(by='Puan', ascending=False))
