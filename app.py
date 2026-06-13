@@ -7,7 +7,7 @@ st.set_page_config(page_title="HKED Turnuva", layout="wide")
 @st.cache_data(ttl=60)
 def load_data():
     # Türkçe karakter sorunu için cp1254 kullanıyoruz
-    return pd.read_csv("NEW HKED.xlsx - Sheet1.csv", header=None, encoding='cp1254')
+    return pd.read_csv("NEW HKED.xlsx", header=None, encoding='cp1254')
 
 try:
     df = load_data()
