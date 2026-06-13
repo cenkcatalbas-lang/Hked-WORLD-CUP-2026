@@ -1,49 +1,43 @@
 import streamlit as st
+import requests
 import pandas as pd
 
-st.set_page_config(page_title="HKED Turnuva", layout="wide")
+st.set_page_config(page_title="HKED Canlı Skor", layout="wide")
 
-@st.cache_data(ttl=60)
-def load_data():
-    # Dosya ismi tam olarak belirttiğiniz gibi
-    return pd.read_excel("NEW HKED.xlsx", header=None)
+# 1. Veri Çekme (API üzerinden)
+@st.cache_data(ttl=3600) # 1 saatte bir güncelle
+def get_live_data():
+    url = "https://www.thesportsdb.com/api/v1/json/3/eventspastleague.php?id=4328"
+    response = requests.get(url)
+    data = response.json()
+    
+    # JSON verisini düzenli bir tabloya çevirelim
+    rows = []
+    for event in data['events']:
+        rows.append({
+            'Maç': f"{event['strHomeTeam']} vs {event['strAwayTeam']}",
+            'Ev_Skor': event['intHomeScore'],
+            'Deplasman_Skor': event['intAwayScore']
+        })
+    return pd.DataFrame(rows)
+
+st.title("🏆 HKED Canlı Tahmin Turnuvası")
 
 try:
-    df = load_data()
-    st.title("🏆 HKED 2026 Tahmin Turnuvası")
+    df = get_live_data()
+    st.subheader("📊 Son Oynanan Maçlar")
+    st.dataframe(df)
 
-    # Admin Panel
-    st.sidebar.header("⚙️ Sonuç Girişi")
-    # Maç listesi 0. sütunda
-    selected_match = st.sidebar.selectbox("Maç Seçin", df[0].tolist())
-    gercek_sonuc = st.sidebar.radio("Sonuç:", ["1", "0", "2"])
-    
+    # 2. Tahminler (API'den gelen maçları seçmek için)
+    st.sidebar.header("⚙️ Tahmin Girişi")
+    selected_match = st.sidebar.selectbox("Maç Seçin", df['Maç'].tolist())
+    tahmin = st.sidebar.radio("Tahmininiz:", ["1", "0", "2"])
+
     if st.sidebar.button("Kaydet"):
-        st.session_state[selected_match] = gercek_sonuc
-        st.sidebar.success(f"Kaydedildi: {selected_match} -> {gercek_sonuc}")
+        st.session_state[selected_match] = tahmin
+        st.sidebar.success(f"{selected_match} için tahmininiz: {tahmin}")
 
-    # Puan Hesaplama
-    # Sütun 6: TOLGA, 7: MUSTAFA, 8: IŞITAN, 9: YİĞİT, 10: CENK
-    katilimcilar = {6: 'TOLGA', 7: 'MUSTAFA', 8: 'IŞITAN', 9: 'YİĞİT', 10: 'CENK'}
-    skorlar = {isim: 0.0 for isim in katilimcilar.values()}
-
-    for _, row in df.iterrows():
-        mac_adi = row[0]
-        if mac_adi in st.session_state:
-            sonuc = st.session_state[mac_adi]
-            # Oranlar 3, 4, 5. sütunlarda (1, 0, 2 sırasıyla)
-            oran_map = {"1": 3, "0": 4, "2": 5}
-            oran = float(row[oran_map[sonuc]])
-            
-            for col_idx, isim in katilimcilar.items():
-                if str(row[col_idx]) == sonuc:
-                    skorlar[isim] += oran
-
-    # Sıralama
-    st.subheader("📊 Güncel Puan Durumu")
-    skor_df = pd.DataFrame(list(skorlar.items()), columns=['Katılımcı', 'Toplam Puan'])
-    st.table(skor_df.sort_values(by='Toplam Puan', ascending=False).reset_index(drop=True))
+    st.info("Sistem artık API ile otomatik çalışıyor! Manuel Excel yüklemenize gerek kalmadı.")
 
 except Exception as e:
-    st.error(f"Dosya okuma hatası: {e}")
-    st.write("Dosyanızın tam isminin 'NEW HKED.xlsx' olduğundan ve projenin ana klasöründe bulunduğundan emin olun.")
+    st.error(f"API verisi alınamadı: {e}")
