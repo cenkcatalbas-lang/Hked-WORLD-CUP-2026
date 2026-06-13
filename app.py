@@ -1,3 +1,5 @@
+st.write("Veri yapısı şöyle görünüyor:")
+st.write(df.head()) # İlk 5 satırı ekrana yazdırır
 import streamlit as st
 import pandas as pd
 
