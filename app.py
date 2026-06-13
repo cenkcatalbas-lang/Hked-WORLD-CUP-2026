@@ -13,8 +13,7 @@ def load_data():
 df = load_data()
 participants = ['TOLGA', 'MUSTAFA', 'IŞITAN', 'YİĞİT', 'CENK']
 
-st.title("🏆 HKED Tahmin Turnuvası")
-
+selected_match = st.selectbox("Maç Seçin", df['MAÇ'].tolist())
 # 2. Admin Paneli (Veri Giriş Bölümü)
 with st.sidebar:
     st.header("⚙️ Maç Sonucu Gir")
