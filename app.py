@@ -7,7 +7,7 @@ st.set_page_config(page_title="HKED Turnuva Tahmin", layout="wide")
 def load_data():
     # Artık dosyanızda başlık olmadığını varsayarak okuyoruz (header=None)
     # Eğer ilk satırda başlık varsa 'header=0' yapın.
-    df = pd.read_csv("NEW HKED.xlsx - Sheet1.csv", header=None)
+    df = pd.read_csv("NEW HKED.xlsx", header=None)
     return df
 
 try:
