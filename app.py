@@ -2,8 +2,13 @@ import streamlit as st
 import pandas as pd
 
 # 1. Veri Okuma
+@st.cache_data(ttl=60)
 def load_data():
-    return pd.read_excel("HKED.xlsx")
+    # header=None diyerek başlık satırı olmadığını belirtiyoruz
+    df = pd.read_excel("HKED.xlsx", header=None)
+    # İlk sütuna "MAÇ" adını veriyoruz
+    df.columns = ['MAÇ'] + [f'KATILIMCI_{i}' for i in range(1, len(df.columns))]
+    return df
 
 df = load_data()
 participants = ['TOLGA', 'MUSTAFA', 'IŞITAN', 'YİĞİT', 'CENK']
