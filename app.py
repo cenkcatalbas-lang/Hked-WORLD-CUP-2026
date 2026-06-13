@@ -1,52 +1,55 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="HKED Turnuva Takip", layout="wide")
+st.set_page_config(page_title="HKED Turnuva Tahmin", layout="wide")
 
 @st.cache_data(ttl=60)
 def load_data():
-    # header=None olduğu için sütunlar 0'dan başlar
-    df = pd.read_excel("HKED.xlsx", header=None)
+    # Artık dosyanızda başlık olmadığını varsayarak okuyoruz (header=None)
+    # Eğer ilk satırda başlık varsa 'header=0' yapın.
+    df = pd.read_csv("NEW HKED.xlsx - Sheet1.csv", header=None)
     return df
 
-df = load_data()
+try:
+    df = load_data()
+    
+    # 0. Sütun: Maç Adı
+    # 3, 4, 5. Sütunlar: Oranlar (1, 0, 2)
+    # 6, 7, 8, 9, 10. Sütunlar: Katılımcılar
+    
+    st.title("🏆 HKED 2026 Tahmin Turnuvası")
 
-# Sütun isimlerini belirleyelim
-# İndeks 2: Takım 1, İndeks 4: Takım 2
-# İndeks 10, 11, 12, 13, 14: Katılımcıların tahminleri
-katilimcilar = {10: 'TOLGA', 11: 'MUSTAFA', 12: 'IŞITAN', 13: 'YİĞİT', 14: 'CENK'}
+    st.sidebar.header("⚙️ Admin: Maç Sonucu Gir")
+    # Maç listesi artık 0. sütunda
+    selected_match = st.sidebar.selectbox("Maç Seçin", df[0].tolist())
+    
+    gercek_sonuc = st.sidebar.radio("Maçın Gerçek Sonucu:", ["1", "0", "2"])
+    
+    if st.sidebar.button("Kaydet"):
+        st.session_state[selected_match] = gercek_sonuc
+        st.sidebar.success(f"{selected_match} sonucu {gercek_sonuc} olarak kaydedildi!")
 
-st.title("🏆 HKED Tahmin Turnuvası")
+    # Puan Hesaplama
+    # Sütun 6: TOLGA, 7: MUSTAFA, 8: IŞITAN, 9: YİĞİT, 10: CENK
+    katilimcilar = {6: 'TOLGA', 7: 'MUSTAFA', 8: 'IŞITAN', 9: 'YİĞİT', 10: 'CENK'}
+    skorlar = {isim: 0.0 for isim in katilimcilar.values()}
 
-# Maçları birleştirelim
-df['MAC_ADI'] = df[2].astype(str) + " - " + df[4].astype(str)
+    for idx, row in df.iterrows():
+        mac_adi = row[0]
+        if mac_adi in st.session_state:
+            sonuc = st.session_state[mac_adi]
+            
+            # Oranları sütun 3, 4, 5'ten al (1: col 3, 0: col 4, 2: col 5)
+            oran_map = {"1": 3, "0": 4, "2": 5}
+            oran = float(row[oran_map[sonuc]])
+            
+            for col_idx, isim in katilimcilar.items():
+                if str(row[col_idx]) == sonuc:
+                    skorlar[isim] += oran
 
-# Admin Panel: Sonuç Girişi
-st.sidebar.header("⚙️ Admin: Maç Sonuç Gir")
-selected_match = st.sidebar.selectbox("Maç Seçin", df['MAC_ADI'].tolist())
-res = st.sidebar.radio("Skor:", ["1", "0", "2"])
+    st.subheader("📊 Güncel Puan Durumu")
+    skor_df = pd.DataFrame(list(skorlar.items()), columns=['Katılımcı', 'Toplam Puan'])
+    st.table(skor_df.sort_values(by='Toplam Puan', ascending=False).reset_index(drop=True))
 
-if st.sidebar.button("Kaydet"):
-    # Kaydedilen sonucu bir dosyaya veya session_state'e aktarabiliriz
-    st.session_state[selected_match] = res
-    st.sidebar.success(f"{selected_match} sonucu {res} olarak kaydedildi!")
-
-# Puan Hesaplama
-skorlar = {isim: 0 for isim in katilimcilar.values()}
-
-for idx, row in df.iterrows():
-    mac_adi = row['MAC_ADI']
-    # Eğer sonuç girildiyse (session_state'den al)
-    if mac_adi in st.session_state:
-        gercek_sonuc = st.session_state[mac_adi]
-        
-        # Her katılımcı için tahminleri kontrol et
-        for col_idx, isim in katilimcilar.items():
-            tahmin = str(row[col_idx])
-            if tahmin == gercek_sonuc:
-                skorlar[isim] += 1 # Doğru tahmin 1 puan
-
-# Skor Tablosu
-st.subheader("📊 Güncel Sıralama")
-skor_df = pd.DataFrame(list(skorlar.items()), columns=['Katılımcı', 'Puan'])
-st.table(skor_df.sort_values(by='Puan', ascending=False))
+except Exception as e:
+    st.error(f"Dosya okuma hatası: {e}")
