@@ -344,6 +344,7 @@ def fetch_live_results(df):
 
         # Excel satırlarıyla eşleştir
         fetched = {}
+        scores_map = {}
         for idx in range(len(df)):
             row = df.iloc[idx]
             t1 = str(row.iloc[2]).strip()
@@ -351,6 +352,7 @@ def fetch_live_results(df):
             for m in api_matches:
                 if match_team(m["home"], t1) and match_team(m["away"], t2):
                     hs, as_ = m["homeScore"], m["awayScore"]
+                    scores_map[str(idx)] = (hs, as_)
                     if hs > as_:
                         fetched[str(idx)] = "1"
                     elif hs == as_:
@@ -358,10 +360,10 @@ def fetch_live_results(df):
                     else:
                         fetched[str(idx)] = "2"
                     break
-        return fetched
+        return fetched, scores_map
 
     except Exception as e:
-        return {}
+        return {}, {}
 
 def load_results():
     if os.path.exists(RESULT_FILE):
@@ -473,9 +475,10 @@ try:
     if ("live_results" not in st.session_state or
         now - st.session_state.get("last_fetch", 0) > 300):
         with st.spinner("🔄 Güncel maç sonuçları çekiliyor..."):
-            fetched = fetch_live_results(df)
+            fetched, scores_map = fetch_live_results(df)
         if fetched:
             st.session_state.live_results = fetched
+            st.session_state.live_scores = scores_map
             st.session_state.last_fetch = now
 
     # Canlı sonuçlar varsa kullan, yoksa dosyadan oku
@@ -600,17 +603,62 @@ try:
 
     st.markdown("---")
 
-    st.markdown('<div class="section-title">⚽ GİRİLEN MAÇ SONUÇLARI</div>', unsafe_allow_html=True)
-    match_list = []
+    st.markdown('<div class="section-title">⚽ MAÇ SONUÇLARI</div>', unsafe_allow_html=True)
+
+    match_cards = []
     for idx_str, res in results.items():
         if res != "Oynanmadı" and idx_str.isdigit():
             row = df.iloc[int(idx_str)]
-            match_list.append({
-                "Maç": f"{row.get('TAKIM1','T1')} - {row.get('TAKIM2','T2')}",
-                "Sonuç": res
-            })
-    if match_list:
-        st.dataframe(pd.DataFrame(match_list), use_container_width=True)
+            t1 = str(row.iloc[2]).strip()
+            t2 = str(row.iloc[4]).strip()
+            try:
+                hs = float(str(row.iloc[5]).replace(",","."))  # 1.00 kolonu
+                ds = float(str(row.iloc[6]).replace(",","."))  # 0.00 kolonu
+                as_ = float(str(row.iloc[7]).replace(",",".")) # 2.00 kolonu
+            except:
+                hs, ds, as_ = None, None, None
+            match_cards.append((idx_str, t1, t2, res, hs, ds, as_))
+
+    if match_cards:
+        # 2 kolonlu grid
+        for i in range(0, len(match_cards), 2):
+            cols = st.columns(2)
+            for j, col in enumerate(cols):
+                if i + j < len(match_cards):
+                    idx_str, t1, t2, res, hs, ds, as_ = match_cards[i + j]
+                    # Skoru reverse-engineer et: oranlardan değil sembolik yaz
+                    live_sc = st.session_state.get("live_scores", {})
+                    real_score = live_sc.get(idx_str)
+                    if res == "1":
+                        score_display = f"{real_score[0]} - {real_score[1]}" if real_score else "✓ - ✗"
+                        color = "#22c55e"
+                        label = f"🏆 {t1} kazandı"
+                    elif res == "0":
+                        score_display = f"{real_score[0]} - {real_score[1]}" if real_score else "— —"
+                        color = "#f59e0b"
+                        label = "🤝 Beraberlik"
+                    else:
+                        score_display = f"{real_score[0]} - {real_score[1]}" if real_score else "✗ - ✓"
+                        color = "#22c55e"
+                        label = f"🏆 {t2} kazandı"
+
+                    t1_bold = f"<b>{t1}</b>" if res == "1" else t1
+                    t2_bold = f"<b>{t2}</b>" if res == "2" else t2
+
+                    col.markdown(f"""
+                    <div style="background:#ffffff; border-radius:12px; padding:14px 16px;
+                                margin:4px 0; box-shadow:0 1px 4px rgba(0,0,0,0.08);
+                                border-top: 3px solid {color};">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                            <span style="color:#1a1a2e; font-weight:600; font-size:0.9rem; flex:1; text-align:right;">{t1_bold}</span>
+                            <span style="background:{color}; color:white; font-weight:800;
+                                         font-size:1rem; padding:4px 12px; border-radius:8px;
+                                         white-space:nowrap;">{score_display}</span>
+                            <span style="color:#1a1a2e; font-weight:600; font-size:0.9rem; flex:1; text-align:left;">{t2_bold}</span>
+                        </div>
+                        <div style="text-align:center; margin-top:6px; font-size:0.78rem; color:#666;">{label}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
     else:
         st.info("Henüz sonuç girilmemiş.")
 
